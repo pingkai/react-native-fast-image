@@ -22,9 +22,9 @@ import com.facebook.react.views.imagehelper.ImageSource;
 import java.io.File;
 
 class FastImageViewModule extends ReactContextBaseJavaModule {
-
     private static final String REACT_CLASS = "FastImageView";
     private static final String ERROR_LOAD_FAILED = "ERROR_LOAD_FAILED";
+    private int preloaders = 0;
 
     FastImageViewModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -37,18 +37,25 @@ class FastImageViewModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void preload(final ReadableArray sources) {
+    public void createPreloader(Promise promise) {
+        promise.resolve(preloaders++);
+    }
+
+    @ReactMethod
+    public void preload(final int preloaderId, final ReadableArray sources) {
         final Activity activity = getCurrentActivity();
         if (activity == null) return;
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                FastImagePreloaderListener preloader = new FastImagePreloaderListener(getReactApplicationContext(), preloaderId, sources.size());
                 for (int i = 0; i < sources.size(); i++) {
                     final ReadableMap source = sources.getMap(i);
                     final FastImageSource imageSource = FastImageViewConverter.getImageSource(activity, source);
 
                     Glide
                             .with(activity.getApplicationContext())
+                            .downloadOnly()
                             // This will make this work for remote and local images. e.g.
                             //    - file:///
                             //    - content://
@@ -59,6 +66,7 @@ class FastImageViewModule extends ReactContextBaseJavaModule {
                                     imageSource.isBase64Resource() ? imageSource.getSource() :
                                     imageSource.isResource() ? imageSource.getUri() : imageSource.getGlideUrl()
                             )
+                            .listener(preloader)
                             .apply(FastImageViewConverter.getOptions(activity, imageSource, source))
                             .preload();
                 }
